@@ -599,6 +599,7 @@
     <div class="splash-dot"></div>
     <div class="splash-dot"></div>
   </div>
+  <div id="splash-status" style="margin-top:20px;font-size:12px;color:rgba(255,255,255,0.6);letter-spacing:0.5px"></div>
 </div>
 
 <div class="phone-shell">
@@ -2780,8 +2781,12 @@
 </script>
 
 <script>
-// ═══ SPLASH SCREEN CONTROL ═══
+// ═══════════════════════════════════════════════════
+// SPLASH SCREEN — Internet milne tak ruko
+// ═══════════════════════════════════════════════════
 var splashHidden = false;
+var FCM_API = 'https://tmart-backend-z1ie.onrender.com';
+
 function hideSplash() {
   if (splashHidden) return;
   splashHidden = true;
@@ -2792,22 +2797,54 @@ function hideSplash() {
   }
 }
 
-// Hide splash when page fully loaded
+// Splash pe status message update karo
+function setSplashStatus(msg) {
+  var el = document.getElementById('splash-status');
+  if (el) el.textContent = msg;
+}
+
+// Internet check — backend ping karo
+async function checkInternet() {
+  try {
+    var res = await fetch(FCM_API + '/api/fcm-tokens', {
+      method: 'HEAD',
+      cache: 'no-cache',
+      signal: AbortSignal.timeout(5000)
+    });
+    return true;
+  } catch(e) {
+    return false;
+  }
+}
+
+// Internet aane tak loop karo
+async function waitForInternet() {
+  setSplashStatus('Internet dhundh rahe hain...');
+  var online = await checkInternet();
+  if (online) {
+    setSplashStatus('Connected! ✓');
+    setTimeout(hideSplash, 600);
+    // FCM register karo ab
+    setTimeout(registerFCM, 1500);
+    // Permissions maango
+    setTimeout(requestAllPermissions, 2000);
+  } else {
+    setSplashStatus('Internet nahi mila, dobara try kar rahe hain...');
+    setTimeout(waitForInternet, 4000); // 4 sec baad phir check
+  }
+}
+
+// Page load hone ke baad start karo
 window.addEventListener('load', function() {
-  setTimeout(hideSplash, 1500); // min 1.5 sec splash
+  // Min 1.5 sec splash dikhao phir internet check
+  setTimeout(waitForInternet, 1500);
 });
 
-// Fallback - max 5 sec splash
-setTimeout(hideSplash, 5000);
-
-// ═══ 1ST TIME PERMISSIONS ═══
+// ═══ PERMISSIONS ═══
 async function requestAllPermissions() {
-  // Notification permission
   if ('Notification' in window && Notification.permission === 'default') {
     await Notification.requestPermission();
   }
-
-  // Capacitor permissions (jab APK mein ho)
   if (window.Capacitor) {
     try {
       const { Geolocation } = Capacitor.Plugins;
@@ -2819,29 +2856,14 @@ async function requestAllPermissions() {
     } catch(e) {}
   }
 }
-
-// 1st time check
-var permAsked = localStorage.getItem('jng_perm_asked');
-if (!permAsked) {
-  window.addEventListener('load', function() {
-    setTimeout(function() {
-      requestAllPermissions();
-      localStorage.setItem('jng_perm_asked', '1');
-    }, 2000); // splash ke baad maango
-  });
-}
 </script>
 
-<!-- ═══ FIREBASE FCM — loaded last to avoid "firebase is not defined" ═══ -->
+<!-- ═══ FIREBASE FCM ═══ -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js"></script>
 <script>
 (function() {
-  // ═══════════════════════════════════════════
-  // FCM — FIREBASE PUSH NOTIFICATIONS
-  // ═══════════════════════════════════════════
   var VAPID_KEY = 'BGTUvgfa8JBMxKC04n5Qt5a98n2pmEF7Ubz1IysO2Q-GNC_xW_6pFaxn_V7TFeXQwkZUTTQY7VB9974MqfJr-E4';
-  var FCM_API = 'https://tmart-backend-z1ie.onrender.com';
 
   try {
     if (!firebase.apps.length) {
@@ -2857,67 +2879,55 @@ if (!permAsked) {
 
     var fcmMessaging = firebase.messaging();
 
-    // Foreground message receive karo
+    // Foreground message
     fcmMessaging.onMessage(function(payload) {
-      console.log('FCM message received:', payload);
       var title = (payload.notification && payload.notification.title) ? payload.notification.title : 'JNGMart';
       var body  = (payload.notification && payload.notification.body)  ? payload.notification.body  : '';
       var type  = (payload.data && payload.data.type) ? payload.data.type : 'general';
-
-      // Toast show karo
-      if (typeof showToast === 'function') {
-        showToast('🔔 ' + title + ': ' + body);
-      }
-
-      // Inbox mein save karo
+      if (typeof showToast === 'function') showToast('🔔 ' + title + ': ' + body);
       if (typeof pushNotification === 'function') {
         var iconMap = {
-          order:    { icon:'fa-cart-shopping', bg:'var(--green-dim)',           color:'var(--green)'  },
-          delivery: { icon:'fa-truck',          bg:'var(--green-dim)',           color:'var(--green)'  },
-          offer:    { icon:'fa-tag',            bg:'rgba(224,123,0,0.1)',        color:'var(--orange)' },
-          system:   { icon:'fa-shield-halved',  bg:'rgba(100,100,255,0.1)',      color:'#5b6af7'       },
-          general:  { icon:'fa-bell',           bg:'rgba(100,100,100,0.1)',      color:'#888'          }
+          order:    { icon:'fa-cart-shopping', bg:'var(--green-dim)',       color:'var(--green)'  },
+          delivery: { icon:'fa-truck',          bg:'var(--green-dim)',       color:'var(--green)'  },
+          offer:    { icon:'fa-tag',            bg:'rgba(224,123,0,0.1)',   color:'var(--orange)' },
+          system:   { icon:'fa-shield-halved',  bg:'rgba(100,100,255,0.1)', color:'#5b6af7'       },
+          general:  { icon:'fa-bell',           bg:'rgba(100,100,100,0.1)', color:'#888'          }
         };
         var ic = iconMap[type] || iconMap['general'];
         pushNotification(type, ic.icon, ic.bg, ic.color, title, body);
       }
     });
 
-    // FCM token register karo
-    async function registerFCM() {
-      try {
-        var permission = await Notification.requestPermission();
-        if (permission !== 'granted') {
-          console.log('Notification permission denied');
-          return;
-        }
-
-        var token = await fcmMessaging.getToken({ vapidKey: VAPID_KEY });
-        if (token) {
-          var userId = localStorage.getItem('jngmart_user_id') || 'guest';
-          fetch(FCM_API + '/api/fcm-token', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: token, userId: userId })
-          }).then(function(r) {
-            console.log('FCM token registered! Devices:', r.status);
-          }).catch(function(e) {
-            console.log('FCM register failed:', e.message);
-          });
-          localStorage.setItem('jngmart_fcm_token', token);
-          console.log('FCM Token:', token);
-        }
-      } catch(err) {
-        console.log('FCM error:', err.message);
-      }
-    }
-
-    // Auto register after 2 sec
-    setTimeout(registerFCM, 2000);
-
   } catch(e) {
     console.log('Firebase init error:', e.message);
   }
+
+  // FCM token register — waitForInternet ke baad call hogi
+  window.registerFCM = async function() {
+    try {
+      var permission = await Notification.requestPermission();
+      if (permission !== 'granted') return;
+
+      var token = await fcmMessaging.getToken({ vapidKey: VAPID_KEY });
+      if (token) {
+        var userId = localStorage.getItem('jngmart_user_id') || 'guest';
+        fetch(FCM_API + '/api/fcm-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: token, userId: userId })
+        }).then(function(r) {
+          console.log('FCM token registered:', r.status);
+        }).catch(function(e) {
+          console.log('FCM register failed:', e.message);
+        });
+        localStorage.setItem('jngmart_fcm_token', token);
+        console.log('FCM Token ready');
+      }
+    } catch(err) {
+      console.log('FCM error:', err.message);
+    }
+  };
+
 })();
 </script>
 </body>
