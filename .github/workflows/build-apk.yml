@@ -1,4 +1,4 @@
-name: Build Signed APK â€“ JNGMart
+name: Build Signed APK - JNGMart
 
 on:
   push:
