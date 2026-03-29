@@ -51,7 +51,7 @@ jobs:
         run: |
           SVG="icon.svg"
           if [ ! -f "$SVG" ]; then
-            echo "icon.svg nahi mila â€” skip"
+            echo "icon.svg nahi mila - skip"
             exit 0
           fi
           for folder in mipmap-mdpi mipmap-hdpi mipmap-xhdpi mipmap-xxhdpi mipmap-xxxhdpi; do
@@ -66,18 +66,21 @@ jobs:
             mkdir -p "$dir"
             rsvg-convert -w $size -h $size "$SVG" > "$dir/ic_launcher.png"
             rsvg-convert -w $size -h $size "$SVG" > "$dir/ic_launcher_round.png"
-            echo "âœ… $folder ${size}x${size}"
+            echo "Done: $folder ${size}x${size}"
           done
 
-      - name: Fix AndroidManifest & Styles
+      - name: Fix AndroidManifest and Styles
         run: |
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
           VALUES_DIR="android/app/src/main/res/values"
           mkdir -p "$VALUES_DIR"
 
-          # Step 1: Styles.xml â€” AppTheme properly define karo
-          cat > "$VALUES_DIR/styles.xml" << 'STYLES_EOF'
-<?xml version="1.0" encoding="utf-8"?>
+          python3 << 'PYEOF'
+import os
+
+values_dir = "android/app/src/main/res/values"
+os.makedirs(values_dir, exist_ok=True)
+
+styles = """<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
         <item name="colorPrimary">#1a9e3a</item>
@@ -89,54 +92,50 @@ jobs:
     <style name="AppTheme.NoActionBarLaunch" parent="AppTheme">
         <item name="android:background">@color/splash_bg</item>
     </style>
-</resources>
-STYLES_EOF
+</resources>"""
 
-          # Step 2: Colors.xml
-          cat > "$VALUES_DIR/colors.xml" << 'COLORS_EOF'
-<?xml version="1.0" encoding="utf-8"?>
+colors = """<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="colorPrimary">#1a9e3a</color>
     <color name="colorPrimaryDark">#157d2e</color>
     <color name="colorAccent">#1a9e3a</color>
     <color name="splash_bg">#1a9e3a</color>
-</resources>
-COLORS_EOF
+</resources>"""
 
-          # Step 3: Permissions â€” pehle existing wale hatao, fresh add karo
-          # Remove duplicate permissions already in manifest by capacitor
-          python3 - << 'PYEOF'
+with open(f"{values_dir}/styles.xml", "w") as f:
+    f.write(styles)
+
+with open(f"{values_dir}/colors.xml", "w") as f:
+    f.write(colors)
+
 import re
-
-with open('android/app/src/main/AndroidManifest.xml', 'r') as f:
+manifest_path = "android/app/src/main/AndroidManifest.xml"
+with open(manifest_path, "r") as f:
     content = f.read()
 
-# Remove any permissions we will re-add to avoid duplicates
 perms_to_add = [
-    'android.permission.INTERNET',
-    'android.permission.ACCESS_NETWORK_STATE',
-    'android.permission.READ_EXTERNAL_STORAGE',
-    'android.permission.WRITE_EXTERNAL_STORAGE',
-    'android.permission.READ_MEDIA_IMAGES',
-    'android.permission.READ_MEDIA_VIDEO',
-    'android.permission.POST_NOTIFICATIONS',
-    'android.permission.RECEIVE_BOOT_COMPLETED',
-    'android.permission.VIBRATE',
-    'android.permission.WAKE_LOCK',
-    'android.permission.CALL_PHONE',
-    'android.permission.READ_PHONE_STATE',
-    'android.permission.CAMERA',
-    'android.permission.ACCESS_FINE_LOCATION',
-    'android.permission.ACCESS_COARSE_LOCATION',
+    "android.permission.INTERNET",
+    "android.permission.ACCESS_NETWORK_STATE",
+    "android.permission.READ_EXTERNAL_STORAGE",
+    "android.permission.WRITE_EXTERNAL_STORAGE",
+    "android.permission.READ_MEDIA_IMAGES",
+    "android.permission.READ_MEDIA_VIDEO",
+    "android.permission.POST_NOTIFICATIONS",
+    "android.permission.RECEIVE_BOOT_COMPLETED",
+    "android.permission.VIBRATE",
+    "android.permission.WAKE_LOCK",
+    "android.permission.CALL_PHONE",
+    "android.permission.READ_PHONE_STATE",
+    "android.permission.CAMERA",
+    "android.permission.ACCESS_FINE_LOCATION",
+    "android.permission.ACCESS_COARSE_LOCATION",
 ]
 
-# Remove existing duplicate lines
 for perm in perms_to_add:
-    pattern = r'\s*<uses-permission[^>]*' + re.escape(perm) + r'[^>]*/>\n?'
-    content = re.sub(pattern, '', content)
+    pattern = r"\s*<uses-permission[^>]*" + re.escape(perm) + r"[^>]*/>\n?"
+    content = re.sub(pattern, "", content)
 
-# Add all permissions fresh before </manifest>
-new_perms = '\n    <!-- JNGMart Permissions -->\n'
+new_perms = "\n    <!-- JNGMart Permissions -->\n"
 new_perms += '    <uses-permission android:name="android.permission.INTERNET" />\n'
 new_perms += '    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n'
 new_perms += '    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />\n'
@@ -153,15 +152,13 @@ new_perms += '    <uses-permission android:name="android.permission.CAMERA" />\n
 new_perms += '    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n'
 new_perms += '    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n'
 
-content = content.replace('</manifest>', new_perms + '</manifest>')
+content = content.replace("</manifest>", new_perms + "</manifest>")
 
-with open('android/app/src/main/AndroidManifest.xml', 'w') as f:
+with open(manifest_path, "w") as f:
     f.write(content)
 
-print('âœ… Permissions fixed!')
+print("All fixed!")
 PYEOF
-
-          echo "âœ… Manifest + Styles fixed!"
 
       - name: Decode Keystore from Secret
         run: |
@@ -202,8 +199,7 @@ PYEOF
         with:
           tag_name: v${{ github.run_number }}
           name: JNGMart v${{ github.run_number }}
-          body: |
-            ðŸš€ JNGMart Auto Build v${{ github.run_number }}
+          body: "JNGMart Auto Build v${{ github.run_number }}"
           files: dist/JNGMart-v${{ github.run_number }}.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
