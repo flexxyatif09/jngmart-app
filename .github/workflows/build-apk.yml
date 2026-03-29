@@ -1,0 +1,103 @@
+name: Build Signed APK â€“ JNGMart
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Prepare Web Assets
+        run: |
+          mkdir -p www
+          if [ -f "index.html" ]; then
+            cp index.html www/index.html
+          elif [ -f "tmart.html" ]; then
+            cp tmart.html www/index.html
+          fi
+
+      - name: Add & Sync Capacitor Android
+        run: |
+          npx cap add android || true
+          npx cap sync android
+
+      - name: Add All Permissions to AndroidManifest.xml
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+
+          # Internet
+          grep -q "INTERNET" $MANIFEST || \
+            sed -i 's|<uses-permission android:name="android.permission.INTERNET"|<!-- already -->|g'
+
+          # Sabhi permissions ek saath inject karo
+          sed -i 's|</manifest>|    <!-- Internet -->\n    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n\n    <!-- Storage -->\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />\n    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />\n    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />\n\n    <!-- Notifications -->\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n    <uses-permission android:name="android.permission.VIBRATE" />\n    <uses-permission android:name="android.permission.WAKE_LOCK" />\n\n    <!-- Phone / Dialer -->\n    <uses-permission android:name="android.permission.CALL_PHONE" />\n    <uses-permission android:name="android.permission.READ_PHONE_STATE" />\n\n    <!-- Camera (optional - profile photo) -->\n    <uses-permission android:name="android.permission.CAMERA" />\n\n    <!-- Location (optional - delivery) -->\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n\n</manifest>|' $MANIFEST
+
+          echo "âœ… Permissions add ho gayi!"
+          cat $MANIFEST
+
+      - name: Decode Keystore from Secret
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/jngmart.keystore
+
+      - name: Make Gradlew Executable
+        run: chmod +x android/gradlew
+
+      - name: Build Signed Release APK
+        working-directory: android
+        env:
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file=$GITHUB_WORKSPACE/android/app/jngmart.keystore \
+            -Pandroid.injected.signing.store.password=$STORE_PASSWORD \
+            -Pandroid.injected.signing.key.alias=$KEY_ALIAS \
+            -Pandroid.injected.signing.key.password=$KEY_PASSWORD
+
+      - name: Rename APK
+        run: |
+          mkdir -p dist
+          cp android/app/build/outputs/apk/release/app-release.apk \
+             dist/JNGMart-v${{ github.run_number }}.apk
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: JNGMart-APK-v${{ github.run_number }}
+          path: dist/JNGMart-v${{ github.run_number }}.apk
+          retention-days: 30
+
+      - name: Create GitHub Release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.run_number }}
+          name: JNGMart v${{ github.run_number }}
+          body: |
+            ðŸš€ JNGMart Auto Build
+            - Branch: ${{ github.ref_name }}
+            - Commit: ${{ github.sha }}
+          files: dist/JNGMart-v${{ github.run_number }}.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
