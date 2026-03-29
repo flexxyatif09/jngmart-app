@@ -1,0 +1,13 @@
+{
+  "appId": "com.jngmart.app",
+  "appName": "JNGMart",
+  "webDir": "www",
+  "server": {
+    "url": "https://flexxyatif09.github.io/jngmart-app/",
+    "cleartext": true,
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}
