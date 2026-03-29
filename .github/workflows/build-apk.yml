@@ -1,4 +1,4 @@
-name: Build Signed APK â€“ JNGMart
+name: Build Signed APK “ JNGMart
 
 on:
   push:
@@ -41,19 +41,45 @@ jobs:
           npx cap add android || true
           npx cap sync android
 
+      - name: Install ImageMagick for Icon Generation
+        run: sudo apt-get install -y imagemagick librsvg2-bin
+
+      - name: Generate App Icons from SVG
+        run: |
+          SVG="icon.svg"
+          if [ ! -f "$SVG" ]; then
+            echo "icon.svg nahi mila â€” skip"
+            exit 0
+          fi
+
+          # Android icon sizes
+          declare -A ICONS=(
+            ["mipmap-mdpi"]=48
+            ["mipmap-hdpi"]=72
+            ["mipmap-xhdpi"]=96
+            ["mipmap-xxhdpi"]=144
+            ["mipmap-xxxhdpi"]=192
+          )
+
+          for folder in "${!ICONS[@]}"; do
+            size="${ICONS[$folder]}"
+            dir="android/app/src/main/res/$folder"
+            mkdir -p "$dir"
+            rsvg-convert -w $size -h $size "$SVG" > "$dir/ic_launcher.png"
+            rsvg-convert -w $size -h $size "$SVG" > "$dir/ic_launcher_round.png"
+            echo "âœ… $folder â†’ ${size}x${size}"
+          done
+
+          # Playstore icon 512x512
+          mkdir -p dist
+          rsvg-convert -w 512 -h 512 "$SVG" > dist/playstore-icon.png
+          echo "âœ… PlayStore icon 512x512 ready!"
+
       - name: Add All Permissions to AndroidManifest.xml
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-
-          # Internet
-          grep -q "INTERNET" $MANIFEST || \
-            sed -i 's|<uses-permission android:name="android.permission.INTERNET"|<!-- already -->|g'
-
-          # Sabhi permissions ek saath inject karo
-          sed -i 's|</manifest>|    <!-- Internet -->\n    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n\n    <!-- Storage -->\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />\n    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />\n    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />\n\n    <!-- Notifications -->\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n    <uses-permission android:name="android.permission.VIBRATE" />\n    <uses-permission android:name="android.permission.WAKE_LOCK" />\n\n    <!-- Phone / Dialer -->\n    <uses-permission android:name="android.permission.CALL_PHONE" />\n    <uses-permission android:name="android.permission.READ_PHONE_STATE" />\n\n    <!-- Camera (optional - profile photo) -->\n    <uses-permission android:name="android.permission.CAMERA" />\n\n    <!-- Location (optional - delivery) -->\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n\n</manifest>|' $MANIFEST
-
+          sed -i 's|</manifest>|    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />\n    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />\n    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n    <uses-permission android:name="android.permission.VIBRATE" />\n    <uses-permission android:name="android.permission.WAKE_LOCK" />\n    <uses-permission android:name="android.permission.CALL_PHONE" />\n    <uses-permission android:name="android.permission.READ_PHONE_STATE" />\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n</manifest>|' $MANIFEST
           echo "âœ… Permissions add ho gayi!"
-          cat $MANIFEST
 
       - name: Decode Keystore from Secret
         run: |
@@ -81,11 +107,11 @@ jobs:
           cp android/app/build/outputs/apk/release/app-release.apk \
              dist/JNGMart-v${{ github.run_number }}.apk
 
-      - name: Upload APK Artifact
+      - name: Upload APK + Icon Artifact
         uses: actions/upload-artifact@v4
         with:
           name: JNGMart-APK-v${{ github.run_number }}
-          path: dist/JNGMart-v${{ github.run_number }}.apk
+          path: dist/
           retention-days: 30
 
       - name: Create GitHub Release
