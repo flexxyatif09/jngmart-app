@@ -54,62 +54,114 @@ jobs:
             echo "icon.svg nahi mila â€” skip"
             exit 0
           fi
-
-          declare -A ICONS=(
-            ["mipmap-mdpi"]=48
-            ["mipmap-hdpi"]=72
-            ["mipmap-xhdpi"]=96
-            ["mipmap-xxhdpi"]=144
-            ["mipmap-xxxhdpi"]=192
-          )
-
-          for folder in "${!ICONS[@]}"; do
-            size="${ICONS[$folder]}"
+          for folder in mipmap-mdpi mipmap-hdpi mipmap-xhdpi mipmap-xxhdpi mipmap-xxxhdpi; do
+            case $folder in
+              mipmap-mdpi)    size=48  ;;
+              mipmap-hdpi)    size=72  ;;
+              mipmap-xhdpi)   size=96  ;;
+              mipmap-xxhdpi)  size=144 ;;
+              mipmap-xxxhdpi) size=192 ;;
+            esac
             dir="android/app/src/main/res/$folder"
             mkdir -p "$dir"
             rsvg-convert -w $size -h $size "$SVG" > "$dir/ic_launcher.png"
             rsvg-convert -w $size -h $size "$SVG" > "$dir/ic_launcher_round.png"
-            echo "âœ… $folder â†’ ${size}x${size}"
+            echo "âœ… $folder ${size}x${size}"
           done
 
-          # Splash screen 2048x2048
-          for folder in drawable drawable-land drawable-port; do
-            dir="android/app/src/main/res/$folder"
-            mkdir -p "$dir"
-            rsvg-convert -w 2048 -h 2048 "$SVG" > "$dir/splash.png"
-          done
-
-          mkdir -p dist
-          rsvg-convert -w 512 -h 512 "$SVG" > dist/playstore-icon.png
-          echo "âœ… All icons generated!"
-
-      - name: Setup Splash Screen in Android
-        run: |
-          # splash colors style
-          STYLES="android/app/src/main/res/values/styles.xml"
-          mkdir -p android/app/src/main/res/values
-          cat > $STYLES << 'STYLES_EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-            <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar">
-              <item name="android:background">@drawable/splash</item>
-              <item name="colorPrimary">#1a9e3a</item>
-              <item name="colorPrimaryDark">#157d2e</item>
-              <item name="colorAccent">#1a9e3a</item>
-              <item name="android:windowSplashScreenBackground">#1a9e3a</item>
-            </style>
-            <style name="AppTheme.NoActionBarLaunch" parent="AppTheme.NoActionBar">
-              <item name="android:background">@drawable/splash</item>
-            </style>
-          </resources>
-          STYLES_EOF
-          echo "âœ… Splash screen styles added!"
-
-      - name: Add All Permissions to AndroidManifest.xml
+      - name: Fix AndroidManifest & Styles
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-          sed -i 's|</manifest>|    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />\n    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />\n    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n    <uses-permission android:name="android.permission.VIBRATE" />\n    <uses-permission android:name="android.permission.WAKE_LOCK" />\n    <uses-permission android:name="android.permission.CALL_PHONE" />\n    <uses-permission android:name="android.permission.READ_PHONE_STATE" />\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n</manifest>|' $MANIFEST
-          echo "âœ… Permissions added!"
+          VALUES_DIR="android/app/src/main/res/values"
+          mkdir -p "$VALUES_DIR"
+
+          # Step 1: Styles.xml â€” AppTheme properly define karo
+          cat > "$VALUES_DIR/styles.xml" << 'STYLES_EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="colorPrimary">#1a9e3a</item>
+        <item name="colorPrimaryDark">#157d2e</item>
+        <item name="colorAccent">#1a9e3a</item>
+        <item name="android:windowBackground">@color/splash_bg</item>
+    </style>
+    <style name="AppTheme.NoActionBar" parent="AppTheme" />
+    <style name="AppTheme.NoActionBarLaunch" parent="AppTheme">
+        <item name="android:background">@color/splash_bg</item>
+    </style>
+</resources>
+STYLES_EOF
+
+          # Step 2: Colors.xml
+          cat > "$VALUES_DIR/colors.xml" << 'COLORS_EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#1a9e3a</color>
+    <color name="colorPrimaryDark">#157d2e</color>
+    <color name="colorAccent">#1a9e3a</color>
+    <color name="splash_bg">#1a9e3a</color>
+</resources>
+COLORS_EOF
+
+          # Step 3: Permissions â€” pehle existing wale hatao, fresh add karo
+          # Remove duplicate permissions already in manifest by capacitor
+          python3 - << 'PYEOF'
+import re
+
+with open('android/app/src/main/AndroidManifest.xml', 'r') as f:
+    content = f.read()
+
+# Remove any permissions we will re-add to avoid duplicates
+perms_to_add = [
+    'android.permission.INTERNET',
+    'android.permission.ACCESS_NETWORK_STATE',
+    'android.permission.READ_EXTERNAL_STORAGE',
+    'android.permission.WRITE_EXTERNAL_STORAGE',
+    'android.permission.READ_MEDIA_IMAGES',
+    'android.permission.READ_MEDIA_VIDEO',
+    'android.permission.POST_NOTIFICATIONS',
+    'android.permission.RECEIVE_BOOT_COMPLETED',
+    'android.permission.VIBRATE',
+    'android.permission.WAKE_LOCK',
+    'android.permission.CALL_PHONE',
+    'android.permission.READ_PHONE_STATE',
+    'android.permission.CAMERA',
+    'android.permission.ACCESS_FINE_LOCATION',
+    'android.permission.ACCESS_COARSE_LOCATION',
+]
+
+# Remove existing duplicate lines
+for perm in perms_to_add:
+    pattern = r'\s*<uses-permission[^>]*' + re.escape(perm) + r'[^>]*/>\n?'
+    content = re.sub(pattern, '', content)
+
+# Add all permissions fresh before </manifest>
+new_perms = '\n    <!-- JNGMart Permissions -->\n'
+new_perms += '    <uses-permission android:name="android.permission.INTERNET" />\n'
+new_perms += '    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n'
+new_perms += '    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />\n'
+new_perms += '    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />\n'
+new_perms += '    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />\n'
+new_perms += '    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />\n'
+new_perms += '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n'
+new_perms += '    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n'
+new_perms += '    <uses-permission android:name="android.permission.VIBRATE" />\n'
+new_perms += '    <uses-permission android:name="android.permission.WAKE_LOCK" />\n'
+new_perms += '    <uses-permission android:name="android.permission.CALL_PHONE" />\n'
+new_perms += '    <uses-permission android:name="android.permission.READ_PHONE_STATE" />\n'
+new_perms += '    <uses-permission android:name="android.permission.CAMERA" />\n'
+new_perms += '    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n'
+new_perms += '    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n'
+
+content = content.replace('</manifest>', new_perms + '</manifest>')
+
+with open('android/app/src/main/AndroidManifest.xml', 'w') as f:
+    f.write(content)
+
+print('âœ… Permissions fixed!')
+PYEOF
+
+          echo "âœ… Manifest + Styles fixed!"
 
       - name: Decode Keystore from Secret
         run: |
