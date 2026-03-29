@@ -1,9 +1,12 @@
-name: Build Signed APK “ JNGMart
+name: Build Signed APK â€“ JNGMart
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -41,8 +44,8 @@ jobs:
           npx cap add android || true
           npx cap sync android
 
-      - name: Install ImageMagick for Icon Generation
-        run: sudo apt-get install -y imagemagick librsvg2-bin
+      - name: Install rsvg-convert
+        run: sudo apt-get install -y librsvg2-bin
 
       - name: Generate App Icons from SVG
         run: |
@@ -52,7 +55,6 @@ jobs:
             exit 0
           fi
 
-          # Android icon sizes
           declare -A ICONS=(
             ["mipmap-mdpi"]=48
             ["mipmap-hdpi"]=72
@@ -70,16 +72,44 @@ jobs:
             echo "âœ… $folder â†’ ${size}x${size}"
           done
 
-          # Playstore icon 512x512
+          # Splash screen 2048x2048
+          for folder in drawable drawable-land drawable-port; do
+            dir="android/app/src/main/res/$folder"
+            mkdir -p "$dir"
+            rsvg-convert -w 2048 -h 2048 "$SVG" > "$dir/splash.png"
+          done
+
           mkdir -p dist
           rsvg-convert -w 512 -h 512 "$SVG" > dist/playstore-icon.png
-          echo "âœ… PlayStore icon 512x512 ready!"
+          echo "âœ… All icons generated!"
+
+      - name: Setup Splash Screen in Android
+        run: |
+          # splash colors style
+          STYLES="android/app/src/main/res/values/styles.xml"
+          mkdir -p android/app/src/main/res/values
+          cat > $STYLES << 'STYLES_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+            <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar">
+              <item name="android:background">@drawable/splash</item>
+              <item name="colorPrimary">#1a9e3a</item>
+              <item name="colorPrimaryDark">#157d2e</item>
+              <item name="colorAccent">#1a9e3a</item>
+              <item name="android:windowSplashScreenBackground">#1a9e3a</item>
+            </style>
+            <style name="AppTheme.NoActionBarLaunch" parent="AppTheme.NoActionBar">
+              <item name="android:background">@drawable/splash</item>
+            </style>
+          </resources>
+          STYLES_EOF
+          echo "âœ… Splash screen styles added!"
 
       - name: Add All Permissions to AndroidManifest.xml
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           sed -i 's|</manifest>|    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />\n    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />\n    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n    <uses-permission android:name="android.permission.VIBRATE" />\n    <uses-permission android:name="android.permission.WAKE_LOCK" />\n    <uses-permission android:name="android.permission.CALL_PHONE" />\n    <uses-permission android:name="android.permission.READ_PHONE_STATE" />\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n</manifest>|' $MANIFEST
-          echo "âœ… Permissions add ho gayi!"
+          echo "âœ… Permissions added!"
 
       - name: Decode Keystore from Secret
         run: |
@@ -107,7 +137,7 @@ jobs:
           cp android/app/build/outputs/apk/release/app-release.apk \
              dist/JNGMart-v${{ github.run_number }}.apk
 
-      - name: Upload APK + Icon Artifact
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: JNGMart-APK-v${{ github.run_number }}
@@ -121,9 +151,7 @@ jobs:
           tag_name: v${{ github.run_number }}
           name: JNGMart v${{ github.run_number }}
           body: |
-            ðŸš€ JNGMart Auto Build
-            - Branch: ${{ github.ref_name }}
-            - Commit: ${{ github.sha }}
+            ðŸš€ JNGMart Auto Build v${{ github.run_number }}
           files: dist/JNGMart-v${{ github.run_number }}.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
