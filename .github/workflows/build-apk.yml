@@ -1,0 +1,206 @@
+name: Build Signed APK - JNGMart
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Prepare Web Assets
+        run: |
+          mkdir -p www
+          if [ -f "index.html" ]; then
+            cp index.html www/index.html
+          elif [ -f "tmart.html" ]; then
+            cp tmart.html www/index.html
+          fi
+
+      - name: Add & Sync Capacitor Android
+        run: |
+          npx cap add android || true
+          npx cap sync android
+
+      - name: Install rsvg-convert
+        run: sudo apt-get install -y librsvg2-bin
+
+      - name: Generate App Icons from SVG
+        run: |
+          SVG="icon.svg"
+          if [ ! -f "$SVG" ]; then
+            echo "icon.svg nahi mila - skip"
+            exit 0
+          fi
+          for folder in mipmap-mdpi mipmap-hdpi mipmap-xhdpi mipmap-xxhdpi mipmap-xxxhdpi; do
+            case $folder in
+              mipmap-mdpi)    size=48  ;;
+              mipmap-hdpi)    size=72  ;;
+              mipmap-xhdpi)   size=96  ;;
+              mipmap-xxhdpi)  size=144 ;;
+              mipmap-xxxhdpi) size=192 ;;
+            esac
+            dir="android/app/src/main/res/$folder"
+            mkdir -p "$dir"
+            rsvg-convert -w $size -h $size "$SVG" > "$dir/ic_launcher.png"
+            rsvg-convert -w $size -h $size "$SVG" > "$dir/ic_launcher_round.png"
+            echo "Done: $folder ${size}x${size}"
+          done
+
+      - name: Fix AndroidManifest and Styles
+        run: |
+          VALUES_DIR="android/app/src/main/res/values"
+          mkdir -p "$VALUES_DIR"
+
+          python3 << 'PYEOF'
+import os
+
+values_dir = "android/app/src/main/res/values"
+os.makedirs(values_dir, exist_ok=True)
+
+styles = """<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="colorPrimary">#1a9e3a</item>
+        <item name="colorPrimaryDark">#157d2e</item>
+        <item name="colorAccent">#1a9e3a</item>
+        <item name="android:windowBackground">@color/splash_bg</item>
+    </style>
+    <style name="AppTheme.NoActionBar" parent="AppTheme" />
+    <style name="AppTheme.NoActionBarLaunch" parent="AppTheme">
+        <item name="android:background">@color/splash_bg</item>
+    </style>
+</resources>"""
+
+colors = """<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#1a9e3a</color>
+    <color name="colorPrimaryDark">#157d2e</color>
+    <color name="colorAccent">#1a9e3a</color>
+    <color name="splash_bg">#1a9e3a</color>
+</resources>"""
+
+with open(f"{values_dir}/styles.xml", "w") as f:
+    f.write(styles)
+
+with open(f"{values_dir}/colors.xml", "w") as f:
+    f.write(colors)
+
+import re
+manifest_path = "android/app/src/main/AndroidManifest.xml"
+with open(manifest_path, "r") as f:
+    content = f.read()
+
+perms_to_add = [
+    "android.permission.INTERNET",
+    "android.permission.ACCESS_NETWORK_STATE",
+    "android.permission.READ_EXTERNAL_STORAGE",
+    "android.permission.WRITE_EXTERNAL_STORAGE",
+    "android.permission.READ_MEDIA_IMAGES",
+    "android.permission.READ_MEDIA_VIDEO",
+    "android.permission.POST_NOTIFICATIONS",
+    "android.permission.RECEIVE_BOOT_COMPLETED",
+    "android.permission.VIBRATE",
+    "android.permission.WAKE_LOCK",
+    "android.permission.CALL_PHONE",
+    "android.permission.READ_PHONE_STATE",
+    "android.permission.CAMERA",
+    "android.permission.ACCESS_FINE_LOCATION",
+    "android.permission.ACCESS_COARSE_LOCATION",
+]
+
+for perm in perms_to_add:
+    pattern = r"\s*<uses-permission[^>]*" + re.escape(perm) + r"[^>]*/>\n?"
+    content = re.sub(pattern, "", content)
+
+new_perms = "\n    <!-- JNGMart Permissions -->\n"
+new_perms += '    <uses-permission android:name="android.permission.INTERNET" />\n'
+new_perms += '    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n'
+new_perms += '    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />\n'
+new_perms += '    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />\n'
+new_perms += '    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />\n'
+new_perms += '    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />\n'
+new_perms += '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n'
+new_perms += '    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n'
+new_perms += '    <uses-permission android:name="android.permission.VIBRATE" />\n'
+new_perms += '    <uses-permission android:name="android.permission.WAKE_LOCK" />\n'
+new_perms += '    <uses-permission android:name="android.permission.CALL_PHONE" />\n'
+new_perms += '    <uses-permission android:name="android.permission.READ_PHONE_STATE" />\n'
+new_perms += '    <uses-permission android:name="android.permission.CAMERA" />\n'
+new_perms += '    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n'
+new_perms += '    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n'
+
+content = content.replace("</manifest>", new_perms + "</manifest>")
+
+with open(manifest_path, "w") as f:
+    f.write(content)
+
+print("All fixed!")
+PYEOF
+
+      - name: Decode Keystore from Secret
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/jngmart.keystore
+
+      - name: Make Gradlew Executable
+        run: chmod +x android/gradlew
+
+      - name: Build Signed Release APK
+        working-directory: android
+        env:
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file=$GITHUB_WORKSPACE/android/app/jngmart.keystore \
+            -Pandroid.injected.signing.store.password=$STORE_PASSWORD \
+            -Pandroid.injected.signing.key.alias=$KEY_ALIAS \
+            -Pandroid.injected.signing.key.password=$KEY_PASSWORD
+
+      - name: Rename APK
+        run: |
+          mkdir -p dist
+          cp android/app/build/outputs/apk/release/app-release.apk \
+             dist/JNGMart-v${{ github.run_number }}.apk
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: JNGMart-APK-v${{ github.run_number }}
+          path: dist/
+          retention-days: 30
+
+      - name: Create GitHub Release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.run_number }}
+          name: JNGMart v${{ github.run_number }}
+          body: "JNGMart Auto Build v${{ github.run_number }}"
+          files: dist/JNGMart-v${{ github.run_number }}.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
