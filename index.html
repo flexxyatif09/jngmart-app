@@ -535,10 +535,72 @@
 </style>
 
 <!-- Firebase SDK (CDN - non-module) -->
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js"></script>
+<!-- Firebase scripts moved to bottom -->
+
+<style>
+  /* ═══ SPLASH SCREEN ═══ */
+  #splash-screen {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: linear-gradient(135deg, #1a9e3a 0%, #157d2e 100%);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    z-index: 99999; transition: opacity 0.6s ease, visibility 0.6s ease;
+  }
+  #splash-screen.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+  .splash-icon {
+    width: 110px; height: 110px; background: rgba(255,255,255,0.15);
+    border-radius: 28px; display: flex; align-items: center; justify-content: center;
+    margin-bottom: 24px; box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    animation: splashPop 0.5s ease;
+  }
+  .splash-title {
+    font-size: 36px; font-weight: 800;
+    color: white; letter-spacing: -1px;
+  }
+  .splash-tagline {
+    font-size: 13px; color: rgba(255,255,255,0.75);
+    letter-spacing: 2px; margin-top: 8px; text-transform: uppercase;
+  }
+  .splash-loader { margin-top: 48px; display: flex; gap: 8px; }
+  .splash-dot {
+    width: 8px; height: 8px; background: rgba(255,255,255,0.6);
+    border-radius: 50%; animation: splashDot 1.2s ease infinite;
+  }
+  .splash-dot:nth-child(2) { animation-delay: 0.2s; }
+  .splash-dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes splashPop { from { transform: scale(0.7); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  @keyframes splashDot { 0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; } 40% { transform: scale(1); opacity: 1; } }
+</style>
 </head>
 <body>
+<div id="splash-screen">
+  <div class="splash-icon">
+    <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+      <!-- Leaf -->
+      <path d="M50 10 C50 10, 75 22, 76 45 C76 58, 65 65, 50 62 C35 65, 24 58, 24 45 C24 22, 50 10, 50 10Z" fill="white" opacity="0.95"/>
+      <path d="M50 18 Q50 42 50 61" stroke="#1a9e3a" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+      <path d="M50 28 Q40 34 30 36" stroke="#1a9e3a" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+      <path d="M50 28 Q60 34 70 36" stroke="#1a9e3a" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+      <path d="M50 40 Q41 44 34 45" stroke="#1a9e3a" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+      <path d="M50 40 Q59 44 66 45" stroke="#1a9e3a" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+      <!-- Stem -->
+      <path d="M50 62 Q50 68 50 72" stroke="white" stroke-width="3" stroke-linecap="round" fill="none" opacity="0.9"/>
+      <!-- Cart -->
+      <rect x="28" y="73" width="44" height="16" rx="4" fill="white" opacity="0.9"/>
+      <path d="M22 67 L28 73 L72 73 L78 67Z" fill="white" opacity="0.85"/>
+      <circle cx="37" cy="93" r="5" fill="white" opacity="0.9"/>
+      <circle cx="63" cy="93" r="5" fill="white" opacity="0.9"/>
+    </svg>
+  </div>
+  <div class="splash-title">JNGMart</div>
+  <div class="splash-tagline">Fresh. Local. Delivered.</div>
+  <div class="splash-loader">
+    <div class="splash-dot"></div>
+    <div class="splash-dot"></div>
+    <div class="splash-dot"></div>
+  </div>
+</div>
+
 <div class="phone-shell">
 
   <!-- ══════════ SCREEN: LOGIN ══════════ -->
@@ -2580,24 +2642,10 @@
   var NOTIF_KEY = 'jngmart_notifications';
   var currentNotifFilter = 'all';
 
-  // Sample/seed notifications
-  var seedNotifications = [
-    { id:'n1', type:'order', icon:'fa-cart-shopping', iconBg:'var(--green-dim)', iconColor:'var(--green)', title:'Order Confirmed! 🎉', body:'Aapka order #4821 confirm ho gaya. Packing shuru ho rahi hai.', time: Date.now() - 2*60*1000, read:false },
-    { id:'n2', type:'delivery', icon:'fa-truck', iconBg:'var(--green-dim)', iconColor:'var(--green)', title:'Driver on the way 🚴', body:'Rahul aapka order lekar nikal pada. ETA: 20 min.', time: Date.now() - 18*60*1000, read:false },
-    { id:'n3', type:'offer', icon:'fa-tag', iconBg:'rgba(224,123,0,0.1)', iconColor:'var(--orange)', title:'20% Off on Sweets! 🍬', body:'Sirf aaj — handcrafted sweets par 20% discount. Code: SWEET20', time: Date.now() - 2*60*60*1000, read:false },
-    { id:'n4', type:'order', icon:'fa-box', iconBg:'var(--green-dim)', iconColor:'var(--green)', title:'Order Delivered ✅', body:'Order #4819 successfully deliver ho gaya. Rating dein!', time: Date.now() - 5*60*60*1000, read:true },
-    { id:'n5', type:'system', icon:'fa-shield-halved', iconBg:'rgba(100,100,255,0.1)', iconColor:'#5b6af7', title:'Login Alert 🔐', body:'Naye device se login detect hua. Aap hi the na?', time: Date.now() - 24*60*60*1000, read:true },
-    { id:'n6', type:'offer', icon:'fa-percent', iconBg:'rgba(224,123,0,0.1)', iconColor:'var(--orange)', title:'Weekend Special! 🛒', body:'Fruits & Veggies par 15% cashback — sirf Saturday & Sunday.', time: Date.now() - 2*24*60*60*1000, read:true },
-    { id:'n7', type:'system', icon:'fa-circle-info', iconBg:'rgba(100,100,255,0.1)', iconColor:'#5b6af7', title:'App Update Available', body:'JNGMart v2.1 available hai. Naye features aur bug fixes ke saath.', time: Date.now() - 3*24*60*60*1000, read:true }
-  ];
-
   function getNotifications() {
     var stored = localStorage.getItem(NOTIF_KEY);
-    if (!stored) {
-      localStorage.setItem(NOTIF_KEY, JSON.stringify(seedNotifications));
-      return seedNotifications;
-    }
-    return JSON.parse(stored);
+    if (!stored) return [];
+    try { return JSON.parse(stored); } catch(e) { return []; }
   }
 
   function saveNotifications(notifs) {
@@ -2726,67 +2774,151 @@
 
 
 
-  // ═══════════════════════════════════════════
-  // FCM — FIREBASE PUSH NOTIFICATIONS
-  // ═══════════════════════════════════════════
-  var firebaseApp = firebase.initializeApp({
-    apiKey: "AIzaSyCAsHVLoJLq_yg-GjYLhWG12MSm4VhUD3s",
-    authDomain: "jngmart.firebaseapp.com",
-    projectId: "jngmart",
-    storageBucket: "jngmart.firebasestorage.app",
-    messagingSenderId: "994578077338",
-    appId: "1:994578077338:web:d95c4705b5ff87847f3123"
-  });
-
-  var fcmMessaging = null;
-  try { fcmMessaging = firebase.messaging(); } catch(e) { console.log('FCM not supported:', e.message); }
-
-  async function registerFCM() {
-    if (!fcmMessaging) return;
-    try {
-      const permission = await Notification.requestPermission();
-      if (permission !== 'granted') return;
-
-      // VAPID key — Firebase Console > Project Settings > Cloud Messaging > Web Push certificates
-      const token = await fcmMessaging.getToken({ vapidKey: 'YOUR_VAPID_KEY' });
-      if (token) {
-        const userId = localStorage.getItem('jngmart_user_id') || 'guest';
-        fetch(API + '/api/fcm-token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token, userId })
-        });
-        localStorage.setItem('jngmart_fcm_token', token);
-        console.log('FCM registered!');
-      }
-    } catch(err) {
-      console.log('FCM error:', err.message);
-    }
-  }
-
-  if (fcmMessaging) {
-    fcmMessaging.onMessage(function(payload) {
-      var title = payload.notification?.title || 'JNGMart';
-      var body = payload.notification?.body || '';
-      showToast('🔔 ' + title + ': ' + body);
-      pushNotification(
-        payload.data?.type || 'system',
-        'fa-bell', 'rgba(100,100,255,0.1)', '#5b6af7',
-        title, body
-      );
-    });
-  }
-
-  // FCM auto-register agar already logged in
-  setTimeout(function() {
-    if (typeof getToken === 'function' && getToken()) {
-      registerFCM();
-    }
-  }, 3000);
-
   // Auto-init badge on page load
   setTimeout(updateNotifBadge, 500);
 
+</script>
+
+<script>
+// ═══ SPLASH SCREEN CONTROL ═══
+var splashHidden = false;
+function hideSplash() {
+  if (splashHidden) return;
+  splashHidden = true;
+  var splash = document.getElementById('splash-screen');
+  if (splash) {
+    splash.classList.add('hidden');
+    setTimeout(function(){ splash.remove(); }, 700);
+  }
+}
+
+// Hide splash when page fully loaded
+window.addEventListener('load', function() {
+  setTimeout(hideSplash, 1500); // min 1.5 sec splash
+});
+
+// Fallback - max 5 sec splash
+setTimeout(hideSplash, 5000);
+
+// ═══ 1ST TIME PERMISSIONS ═══
+async function requestAllPermissions() {
+  // Notification permission
+  if ('Notification' in window && Notification.permission === 'default') {
+    await Notification.requestPermission();
+  }
+
+  // Capacitor permissions (jab APK mein ho)
+  if (window.Capacitor) {
+    try {
+      const { Geolocation } = Capacitor.Plugins;
+      if (Geolocation) await Geolocation.requestPermissions();
+    } catch(e) {}
+    try {
+      const { Camera } = Capacitor.Plugins;
+      if (Camera) await Camera.requestPermissions();
+    } catch(e) {}
+  }
+}
+
+// 1st time check
+var permAsked = localStorage.getItem('jng_perm_asked');
+if (!permAsked) {
+  window.addEventListener('load', function() {
+    setTimeout(function() {
+      requestAllPermissions();
+      localStorage.setItem('jng_perm_asked', '1');
+    }, 2000); // splash ke baad maango
+  });
+}
+</script>
+
+<!-- ═══ FIREBASE FCM — loaded last to avoid "firebase is not defined" ═══ -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js"></script>
+<script>
+(function() {
+  // ═══════════════════════════════════════════
+  // FCM — FIREBASE PUSH NOTIFICATIONS
+  // ═══════════════════════════════════════════
+  var VAPID_KEY = 'BGTUvgfa8JBMxKC04n5Qt5a98n2pmEF7Ubz1IysO2Q-GNC_xW_6pFaxn_V7TFeXQwkZUTTQY7VB9974MqfJr-E4';
+  var FCM_API = 'https://tmart-backend-z1ie.onrender.com';
+
+  try {
+    if (!firebase.apps.length) {
+      firebase.initializeApp({
+        apiKey: "AIzaSyCAsHVLoJLq_yg-GjYLhWG12MSm4VhUD3s",
+        authDomain: "jngmart.firebaseapp.com",
+        projectId: "jngmart",
+        storageBucket: "jngmart.firebasestorage.app",
+        messagingSenderId: "994578077338",
+        appId: "1:994578077338:web:d95c4705b5ff87847f3123"
+      });
+    }
+
+    var fcmMessaging = firebase.messaging();
+
+    // Foreground message receive karo
+    fcmMessaging.onMessage(function(payload) {
+      console.log('FCM message received:', payload);
+      var title = (payload.notification && payload.notification.title) ? payload.notification.title : 'JNGMart';
+      var body  = (payload.notification && payload.notification.body)  ? payload.notification.body  : '';
+      var type  = (payload.data && payload.data.type) ? payload.data.type : 'general';
+
+      // Toast show karo
+      if (typeof showToast === 'function') {
+        showToast('🔔 ' + title + ': ' + body);
+      }
+
+      // Inbox mein save karo
+      if (typeof pushNotification === 'function') {
+        var iconMap = {
+          order:    { icon:'fa-cart-shopping', bg:'var(--green-dim)',           color:'var(--green)'  },
+          delivery: { icon:'fa-truck',          bg:'var(--green-dim)',           color:'var(--green)'  },
+          offer:    { icon:'fa-tag',            bg:'rgba(224,123,0,0.1)',        color:'var(--orange)' },
+          system:   { icon:'fa-shield-halved',  bg:'rgba(100,100,255,0.1)',      color:'#5b6af7'       },
+          general:  { icon:'fa-bell',           bg:'rgba(100,100,100,0.1)',      color:'#888'          }
+        };
+        var ic = iconMap[type] || iconMap['general'];
+        pushNotification(type, ic.icon, ic.bg, ic.color, title, body);
+      }
+    });
+
+    // FCM token register karo
+    async function registerFCM() {
+      try {
+        var permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+          console.log('Notification permission denied');
+          return;
+        }
+
+        var token = await fcmMessaging.getToken({ vapidKey: VAPID_KEY });
+        if (token) {
+          var userId = localStorage.getItem('jngmart_user_id') || 'guest';
+          fetch(FCM_API + '/api/fcm-token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: token, userId: userId })
+          }).then(function(r) {
+            console.log('FCM token registered! Devices:', r.status);
+          }).catch(function(e) {
+            console.log('FCM register failed:', e.message);
+          });
+          localStorage.setItem('jngmart_fcm_token', token);
+          console.log('FCM Token:', token);
+        }
+      } catch(err) {
+        console.log('FCM error:', err.message);
+      }
+    }
+
+    // Auto register after 2 sec
+    setTimeout(registerFCM, 2000);
+
+  } catch(e) {
+    console.log('Firebase init error:', e.message);
+  }
+})();
 </script>
 </body>
 </html>
